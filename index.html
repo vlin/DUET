@@ -1,0 +1,534 @@
+<!DOCTYPE HTML>
+<html lang='en'>
+
+<head>
+  <meta charset='UTF-8'>
+  <title>Quintus</title>
+  <style>
+  body {
+    background: #fff;
+  }
+  #quintus_container {
+    background: #000;
+  }
+  </style>
+</head>
+
+<body style="margin:0;">
+  <script src="lib/quintus-all.min.js"></script>
+  <script>
+  window.addEventListener('load', function(e) {
+    var Q = window.Q = Quintus()
+      .include('Sprites, Scenes, Touch, UI')
+      .setup({
+        width: 480,
+        height: 800
+      });
+    Q.touch(Q.SPRITE_FRIENDLY);
+
+    //remove gravity
+    //Q.gravityY = 0;
+    //Q.gravityX = 0;
+
+    var DUET = {
+      level: {
+        'easy': {
+          shapeStyle: ['Block'],
+          stepAngle: [6, 6],
+          launchDelay: 0.8,
+          shake: true
+        },
+        'hard': {
+          shapeStyle: ['Block', 'Shape'],
+          stepAngle: [7, 7],
+          launchDelay: 1.12,
+          shake: true
+        },
+        'impossible': {
+          shapeStyle: ['Block', 'Shape'],
+          stepAngle: [7, 5],
+          launchDelay: 1.12,
+          shake: true
+        },
+      }
+    };
+
+    var diff = 'easy';
+    var level = DUET.level[diff];
+
+    DUET.points = function(num, stepLength, x, y) {
+      var angle = 0, //90 * Math.PI,
+        numPoints = num,
+        minX = 0,
+        maxX = 0,
+        minY = 0,
+        maxY = 0,
+        curX, curY;
+
+      var p = {};
+      p.points = [];
+      var degree = Math.PI / 180;
+      var startAmount = stepLength || 50,
+        r = startAmount;
+
+      for (var i = 0; i < numPoints; i++) {
+        curX = Math.floor(Math.cos(degree * angle) * r);
+        curY = Math.floor(Math.sin(degree * angle) * r);
+        if (curX < minX) minX = curX;
+        if (curX > maxX) maxX = curX;
+        if (curY < minY) minY = curY;
+        if (curY > maxY) maxY = curY;
+        p.points.push([curX, curY]);
+        if (stepLength == 0) {
+          r = Math.floor(Math.random() * startAmount / 2 + 30);
+        }
+       angle += 360 / numPoints;
+      };
+      if (!x || !y) {
+        p.w = maxX - minX;
+        p.h = maxY - minY;
+        x = -minX - p.w / 2;
+        y = -minY - p.h / 2;
+      } else {
+        x += stepLength;
+        y += stepLength;
+      }
+      for (var i = 0; i < numPoints; i++) {
+        p.points[i][0] += x;
+        p.points[i][1] += y;
+      }
+      return p;
+    };
+
+    var playerRadius = 118,
+      ballRadius = 17,
+      centerX = Q.width / 2;
+    centerY = Q.height - playerRadius - ballRadius;
+
+    Q.GameObject.extend('Generator', {
+      init: function() {
+        this.p = {
+          launchDelay: level.launchDelay,
+          launch: 1
+        }
+      },
+      update: function(dt) {
+        this.p.launch -= dt;
+
+        if (this.p.launch < 0) {
+          var x = (Math.random() * level.shapeStyle.length >> 0);
+          this.stage.insert(new Q[level.shapeStyle[x]]());
+          this.p.launch = this.p.launchDelay;
+        }
+      }
+    });
+
+    Q.Sprite.extend('Shape', {
+      init: function(p) {
+        var p = DUET.points(3 + Math.floor(Math.random() * 5), 0);
+        p = Q._extend({
+          x: Math.random() * (Q.width / 2) + 120,
+          y: 0,
+          cx: p.w / 2,
+          cy: p.h / 2,
+
+          dx: 3,
+          dy: 5,
+          speed: 50,
+          omega: Math.random() * 180 + 20,
+          scaleOffset: 0,
+          scaleSpeed: Math.random(),
+          scaleAmount: 0.70 * Math.random(),
+          angle: 0,
+          socred: false,
+          type: Q.SPRITE_ENEMY
+        }, p);
+
+        this._super(p);
+      },
+      draw: function(ctx) {
+        var p = this.p.points,
+          len = p.length;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.moveTo(p[0][0], p[0][1]);
+        for (var i = 1; i < len; i++) {
+          ctx.lineTo(p[i][0], p[i][1]);
+        }
+        ctx.closePath();
+        ctx.fill();
+      },
+
+      step: function(dt) {
+        var p = this.p;
+        p.y += p.dy * p.speed * dt;
+
+        if(!p.scored && p.y > centerY){
+          Q.state.inc('score', 15);
+          p.scored = true;
+        }
+        if (p.y > Q.height + 233) {
+          this.destroy();
+          Q.state.inc('score', 15);
+        }
+
+        p.angle += dt * p.omega;
+
+        p.scaleOffset += dt;
+        p.scale = 1 + Math.sin(p.scaleOffset * p.scaleSpeed) * p.scaleAmount;
+
+      }
+    });
+
+    Q.Sprite.extend('Block', {
+      init: function(p) {
+        var sand = Math.random() * 3 >> 0;
+        var rectangle = [{
+          w: 233,
+          h: 46
+        }, {
+          w: 140,
+          h: 46
+        }, {
+          w: 112,
+          h: 89
+        }];
+
+        this._super({
+          color: '#fff',
+          w: rectangle[sand].w,
+          h: rectangle[sand].h,
+          orgX: sand == 0 ? (Math.random() + 0.5 >> 0 ? 33 : 214) + 116 :
+             sand == 1 ? 240 :
+             (Math.random() + 0.5 >> 0 ? 161 : 319),
+          y: 0,
+          cx: rectangle[sand].w / 2,
+          cy: rectangle[sand].h / 2,
+          dy: 6,
+          offsetX: 0,
+          offsetSpeed: 3 * Math.random(),
+          offsetAmount: 65 * Math.random(),
+          speed: 50,
+          omega: Math.random() * 3 >> 0 ? 0 : (Math.random()-0.5) * 60,
+          angle: 0,
+          shake: level.shake && !(Math.random() * 3 >> 0),
+          socred: false,
+          type: Q.SPRITE_ENEMY
+        }, p);
+
+      },
+      draw: function(ctx) {
+        ctx.fillStyle = this.p.color;
+        ctx.fillRect(-this.p.cx, -this.p.cy, this.p.w, this.p.h);
+      },
+      step: function(dt) {
+        var p = this.p;
+        p.y += p.dy * p.speed * dt;
+        p.angle += dt * p.omega;
+
+        if(p.shake){
+          p.offsetX += dt;
+          p.x = p.orgX + Math.sin(p.offsetX * p.offsetSpeed) * p.offsetAmount;
+        } else {
+          p.x = p.orgX;
+        }
+
+        if(!p.scored && p.y > centerY){
+          Q.state.inc('score', 10);
+          p.scored = true;
+        }
+        if (p.y > Q.height + 233) {
+          this.destroy();
+        }
+      }
+    });
+
+    Q.Sprite.extend('Ball', {
+      init: function(p) {
+        this._super({
+          collisionMask: Q.SPRITE_ENEMY,
+          w: ballRadius * 2,
+          h: ballRadius * 2,
+          z: 2,
+          sort: true
+        }, p);
+
+        this.on('hit');
+      },
+      draw: function(ctx) {
+        ctx.fillStyle = this.p.color;
+        ctx.beginPath();
+        ctx.arc(
+          this.p.cx,
+          this.p.cy,
+          this.p.w / 2, 0, Math.PI * 2);
+        ctx.fill();
+      },
+      step: function(dt) {
+        this.stage.collide(this);
+      },
+      hit: function(col) {
+        if (col.obj.isA('Shape') || col.obj.isA('Block')) {
+          Q.stage().pause();
+          Q.stageScene('gameOver', 1, {score: Q.state.get('score')});
+        }
+      }
+    });
+
+    Q.Sprite.extend('Mask', {
+      init: function(p) {
+        this._super(p, {
+          x: 0,
+          y: 0,
+          z: 10,
+          sort: true,
+          type: Q.SPRITE_FRIENDLY
+        });
+        this.timer = null;
+        this.ball1 = Q('Ball').items[0].p;
+        this.ball2 = Q('Ball').items[1].p;
+        this.on('touch');
+        this.on('touchEnd');
+      },
+      draw: function(ctx) {
+        ctx.beginPath();
+        ctx.strokeStyle = '#666';
+        ctx.arc(
+          this.p.cx,
+          this.p.cy,
+          playerRadius, 0, Math.PI * 2);
+        ctx.stroke();
+      },
+      touch: function(touch) {
+        var that = this;
+        this.timer = setInterval(function() {
+          if (touch.x < Q.width / 2) {
+            that.ball1.angle -= level.stepAngle[0];
+            that.ball2.angle -= level.stepAngle[1];
+          } else {
+            that.ball1.angle += level.stepAngle[1];
+            that.ball2. angle += level.stepAngle[0];
+          }
+        }, 20);
+
+      },
+      touchEnd: function(touch) {
+        clearInterval(this.timer);
+      }
+    });
+
+    Q.UI.Text.extend('Score',{
+      init: function() {
+        this._super({
+          label: 'score: 0',
+          align: 'right',
+          x: Q.width - 80,
+          y: 10,
+          weight: 'normal',
+          color: '#fff',
+          size:18
+        });
+
+        Q.state.on('change.score',this,'score');
+      },
+
+      score: function(score) {
+        this.p.label = 'score: ' + score;
+      }
+    });
+
+    Q.scene('start', new Q.Scene(function(stage) {
+
+      var w = Q.width;
+      var h = Q.height;
+
+      var container = stage.insert(new Q.UI.Container({
+        x: w / 2,
+        y: h / 2,
+        w: w - 100,
+        h: h,
+        fill: 'rgba(0,0,0, .1)'
+      }));
+      var title = container.insert(new Q.UI.Text({
+        x: 0,
+        y: -300,
+        size: 130,
+        color: '#fff',
+        align: 'center',
+        weight: 100,
+        label: 'T E U D'
+      }));
+      container.insert(new Q.UI.Button({
+        x: 0,
+        y: 220,
+        w: 300,
+        fill: 'rgba(255, 255, 255, .5)',
+        label: 'Easy',
+        type: Q.SPRITE_FRIENDLY
+      }, function() {
+        startGame('easy');
+      }));
+      container.insert(new Q.UI.Button({
+        x: 0,
+        y: 270,
+        w: 300,
+        fill: 'rgba(255, 255, 255, .5)',
+        label: 'Hard',
+        type: Q.SPRITE_FRIENDLY
+      }, function() {
+        startGame('hard');
+      }));
+      container.insert(new Q.UI.Button({
+        x: 0,
+        y: 320,
+        w: 300,
+        fill: 'rgba(255, 255, 255, .5)',
+        label: 'Impossible',
+        type: Q.SPRITE_FRIENDLY
+      }, function() {
+        startGame('impossible');
+      }));
+      var author = container.insert(new Q.UI.Text({
+        x: 0,
+        y: h / 2 - 30,
+        size: 16,
+        color: '#333',
+        align: 'center',
+        weight: 100,
+        label: 'Victor\n0.0.2'
+      }));
+
+      var redBall = stage.insert(new Q.Ball({
+        color: '#f00',
+        cx: 0,
+        cy: 0,
+        x: centerX,
+        y: Q.height / 2,
+        points: DUET.points(16, ballRadius, playerRadius - ballRadius, -ballRadius).points
+      }));
+      var blueBall = stage.insert(new Q.Ball({
+        color: '#21aaff',
+        cx: -0,
+        cy: 0,
+        x: centerX,
+        y: Q.height / 2,
+        points: DUET.points(16, ballRadius, -playerRadius - ballRadius, -ballRadius).points
+      }));
+
+      var angel = 0, t = 0;
+        degree = Math.PI / 180,
+        timer = setInterval(function(){
+          var r =  Math.sin(angel*degree) * playerRadius;
+          blueBall.p.angle += 9;
+          redBall.p.angle += 9;
+          blueBall.p.cx =-r;
+          redBall.p.cx =r;
+          angel ++;
+        }, 20);
+
+      function startGame(diff){
+        level = DUET.level[diff];
+        score = 0;
+        Q.clearStages();
+        Q.stageScene('level1');
+      }
+    }));
+
+
+    Q.scene('level1', new Q.Scene(function(stage) {
+
+      Q.state.reset({ score: 0, lives: 2 });
+      stage.insert(new Q.Score());
+
+      stage.insert(new Q.Ball({
+        color: '#21aaff',
+        cx: -playerRadius,
+        cy: 0,
+        x: centerX,
+        y: centerY,
+        points: DUET.points(16, ballRadius, -playerRadius - ballRadius, -ballRadius).points
+      }));
+      stage.insert(new Q.Ball({
+        color: '#f00',
+        cx: playerRadius,
+        cy: 0,
+        x: centerX,
+        y: centerY,
+        points: DUET.points(16, ballRadius, playerRadius - ballRadius, -ballRadius).points
+      }));
+
+      stage.insert(new Q.Mask({
+        cx: centerX,
+        cy: centerY,
+        w: Q.width * 2,
+        h: Q.height * 2
+      }));
+
+      stage.insert(new Q.Generator());
+
+    }));
+
+    Q.scene('gameOver', function(stage) {
+
+      //Q.stageScene(null);
+      var w = Q.width;
+      var h = Q.height;
+
+      var container = stage.insert(new Q.UI.Container({
+        x: w / 2,
+        y: h / 3,
+        w: w,
+        h: h,
+        fill: 'rgba(100, 100, 100, .8)'
+      }));
+      var tryAgain = container.insert(new Q.UI.Button({
+        x: 0,
+        y: 0,
+        w: 300,
+        fill: 'rgba(255, 255, 255)',
+        label: 'Try again',
+        type: Q.SPRITE_FRIENDLY
+      }));
+      var mainMenu = container.insert(new Q.UI.Button({
+        x: 0,
+        y: 20 + tryAgain.p.h,
+        w: 300,
+        fill: 'rgba(255, 255, 255)',
+        label: 'Back home',
+        type: Q.SPRITE_FRIENDLY
+      }));
+      container.fit(50);
+/*
+      var score = stage.options.score;
+      //console.log(score, typeof score)
+      container.insert(new Q.Score({
+        x: w / 2,
+        y: 200,
+        size: 120,
+        label: score,
+      }));
+      for(var i = 0;i <= score; i++){
+        Q.state.inc('score', 1);
+      }
+*/
+
+      tryAgain.on('click', function() {
+        Q.clearStages();
+        Q.stageScene('level1');
+      });
+      mainMenu.on('click', function() {
+        Q.clearStages();
+        Q.stageScene('start');
+      });
+
+    });
+
+    Q.stageScene('start');
+    //Q.debug = true;
+    //Q.debugFill = true;
+
+  });
+  </script>
+</body>
+
+</html>
