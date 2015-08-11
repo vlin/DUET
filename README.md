@@ -1,7 +1,6 @@
-# DUET - html version 
+# DUET - HTML version 
 
-A html version of the DUET. 
-[Demo](http://www.vlin.org/duet/)
+HTML version [Demo](http://www.vlin.org/duet/)
 
 ###What is the DUET?
 
