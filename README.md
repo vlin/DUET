@@ -2,7 +2,7 @@
 
 an HTML5 game using the JavaScript game engine Quintus.
 
-[Demo](http://www.vlin.org/duet/)
+[Demo](http://www.vlin.org/DUET/)
 
 ###What is the DUET?
 
