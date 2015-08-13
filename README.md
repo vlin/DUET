@@ -1,6 +1,6 @@
 # DUET - HTML5 version 
 
-an HTML5 game using the JavaScript game engine Quintus.
+a HTML5 game using the JavaScript game engine Quintus.
 
 [Demo](http://www.vlin.org/DUET/)
 
